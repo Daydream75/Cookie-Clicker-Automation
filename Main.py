@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
@@ -17,14 +18,7 @@ chromeOptions = webdriver.ChromeOptions()
 chromeOptions.add_experimental_option("detach", True) # Stops site from closing when program is done
 browser = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()), options=chromeOptions)
 browser.get(cookieClickerURL)
-browser.implicitly_wait(10)
-
-# Closes a popup before game can start
-try:
-    languageSelect = browser.find_element(By.XPATH, "//DIV[@id='langSelect-EN']")
-    languageSelect.click()
-except TimeoutException:
-    pass
+browser.implicitly_wait(5) # Will wait 5 seconds for an element to appear before throwing an exception error
 
 # Saves the game to a file
 def saveGame():
@@ -53,7 +47,7 @@ def saveGame():
 
 # Loads a saved game file
 def loadGame():
-    time.sleep(.1)
+    time.sleep(.5)
     optionsButton = browser.find_element(By.XPATH, "//div[@id='prefsButton']/descendant::div[@class='subButton']")
     if optionsButton.get_attribute("class") != "panelButton selected":
         optionsButton.click()
@@ -75,31 +69,57 @@ def loadGame():
     optionsButton = browser.find_element(By.XPATH, "//div[@id='prefsButton']/descendant::div[@class='subButton']")
     optionsButton.click()
 
+# Loops management of the game for a given time
+def runLoop(runTime):
+    # This while loop repeats the game processes for the given time
+    endTime = time.time() + 60 * runTime
+    while time.time() < endTime:
+        # Try catch will cause loop to continue if a StaleElementReferenceException appears
+        try:
+            # Clicks the main cookie 500 times
+            time.sleep(.1)
+            cookie = browser.find_element(By.XPATH, "//BUTTON[@id='bigCookie']")
+            for i in range(500):
+                cookie.click()
+                time.sleep(.01)
+                
+            # Checks if any upgrades can be purchased and buys them if possible
+            time.sleep(.1)
+            try:
+                upgrade0 = browser.find_element(By.XPATH, "//div[@id='upgrade0']")
+                while upgrade0.get_attribute("class") == "crate upgrade enabled":
+                    upgrade0.click()
+                    upgrade0 = browser.find_element(By.XPATH, "//div[@id='upgrade0']")
+            except NoSuchElementException:
+                pass
+
+            # For each product that can be bought, buys as many as possible
+            time.sleep(.1)
+            try:
+                products = browser.find_elements(By.XPATH, "//div[@class='product unlocked enabled']")
+                for i in range(len(products)-1,-1,-1):
+                    while products[i].get_attribute("class") == "product unlocked enabled":
+                        products[i].click()
+            except NoSuchElementException:
+                pass
+
+            # Saves the game
+            saveGame()
+        except StaleElementReferenceException:
+            pass
+
+# Closes a popup before game can start with a check in case it doesn't appear
+try:
+    languageSelect = browser.find_element(By.XPATH, "//DIV[@id='langSelect-EN']")
+    languageSelect.click()
+except TimeoutException:
+    pass
+
 # Checks if there is a save game in the folder and loads it to the website if it exists
 if os.path.isfile("save.txt"):
-    loadGame()
+    try:
+        loadGame()
+    except StaleElementReferenceException:
+        loadGame()
 
-# This while loop repeats the game processes for the given time, 
-runTime = 3
-endTime = time.time() + 60 * runTime
-while time.time() < endTime:    
-    # Checks if any upgrades can be purchased and buys them if possible
-    upgrade0 = browser.find_element(By.XPATH, "//div[@id='upgrade0']")
-    while upgrade0.get_attribute("class") == "crate upgrade enabled":
-        upgrade0.click()
-        upgrade0 = browser.find_element(By.XPATH, "//div[@id='upgrade0']")
-
-    # For each product that can be bought, buys as many as possible
-    products = browser.find_elements(By.XPATH, "//div[@class='product unlocked enabled']")
-    for i in range(len(products)-1,-1,-1):
-        while products[i].get_attribute("class") == "product unlocked enabled":
-            products[i].click()
-
-    # Clicks the main cookie 500 times
-    cookie = browser.find_element(By.XPATH, "//BUTTON[@id='bigCookie']")
-    for i in range(500):
-        cookie.click()
-        time.sleep(.01)
-
-    # Saves the game
-    saveGame()
+runLoop(10)
