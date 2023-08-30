@@ -20,6 +20,8 @@ browser = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()
 browser.get(cookieClickerURL)
 browser.implicitly_wait(5) # Will wait 5 seconds for an element to appear before throwing an exception error
 
+lastaction = ""
+
 # Saves the game to a file
 def saveGame():
     # Checks if option menu is closed and opens it if needed
@@ -76,36 +78,49 @@ def runLoop(runTime):
     while time.time() < endTime:
         # Try catch will cause loop to continue if a StaleElementReferenceException appears
         try:
+            # Tries 5 times to save the game and passes if it can't, prints what went wrong for diagnoses in case of failure
+            lastaction = "saving game"
+            for i in range(5):
+                try:
+                    saveGame()
+                    break
+                except Exception as error:
+                    print("Save failed - " + error)
+                    pass
+
             # Clicks the main cookie 500 times
+            lastaction = "clicking cookie"
             time.sleep(.1)
             cookie = browser.find_element(By.XPATH, "//BUTTON[@id='bigCookie']")
             for i in range(500):
                 cookie.click()
                 time.sleep(.01)
-                
-            # Checks if any upgrades can be purchased and buys them if possible
+
+            # Checks if any upgrades can be purchased and then buys them
+            lastaction = "buying upgrades"
             time.sleep(.1)
             try:
                 upgrade0 = browser.find_element(By.XPATH, "//div[@id='upgrade0']")
                 while upgrade0.get_attribute("class") == "crate upgrade enabled":
                     upgrade0.click()
+                    time.sleep(.1)
                     upgrade0 = browser.find_element(By.XPATH, "//div[@id='upgrade0']")
             except NoSuchElementException:
                 pass
 
             # For each product that can be bought, buys as many as possible
+            lastaction = "buying products"
             time.sleep(.1)
             try:
                 products = browser.find_elements(By.XPATH, "//div[@class='product unlocked enabled']")
                 for i in range(len(products)-1,-1,-1):
                     while products[i].get_attribute("class") == "product unlocked enabled":
                         products[i].click()
+                        time.sleep(.1)
             except NoSuchElementException:
                 pass
-
-            # Saves the game
-            saveGame()
         except StaleElementReferenceException:
+            print("Stale Exception Thrown at " +  lastaction)
             pass
 
 # Closes a popup before game can start with a check in case it doesn't appear
@@ -122,4 +137,5 @@ if os.path.isfile("save.txt"):
     except StaleElementReferenceException:
         loadGame()
 
-runLoop(10)
+# Runs the game for 15 hours. Since it saves every loop, it can be stopped at any time with no progress lost
+runLoop(900)
